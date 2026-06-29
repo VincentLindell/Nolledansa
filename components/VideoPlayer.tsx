@@ -48,6 +48,13 @@ export default function VideoPlayer({ videoUrl, selectedSegments }: VideoPlayerP
 
     if (video.currentTime >= seg.end_time) {
       const nextIndex = (currentSegmentIndex + 1) % selectedSegments.length;
+      const nextSeg = selectedSegments[nextIndex];
+
+      if (nextIndex > currentSegmentIndex && nextSeg.start_time <= video.currentTime) {
+        setCurrentSegmentIndex(nextIndex);
+        return;
+      }
+
       jumpToSegment(nextIndex);
     }
   }, [selectedSegments, currentSegmentIndex, jumpToSegment]);
