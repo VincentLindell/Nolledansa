@@ -70,12 +70,14 @@ export async function approveEditRequest(requestId: string) {
     .update({
       title: request.title,
       section: request.section,
+      organization: request.organization ?? "Nollningen",
       year: request.year,
       song_title: request.song_title,
       dancer_names: request.dancer_names ?? "",
       artist: request.artist,
       spotify_url: request.spotify_url,
       thumbnail_url: request.thumbnail_url,
+      ...(request.video_url ? { video_url: request.video_url } : {}),
     })
     .eq("id", request.dance_id);
 

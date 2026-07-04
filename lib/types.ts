@@ -70,11 +70,13 @@ export interface DanceEditRequest {
   dance_id: string;
   title: string;
   section: Section;
+  organization: DanceOrganization | null;
   year: string;
   song_title: string;
   dancer_names: string | null;
   artist: string | null;
   spotify_url: string | null;
+  video_url: string | null;
   thumbnail_url: string | null;
   requester_note: string | null;
   status: DanceEditRequestStatus;

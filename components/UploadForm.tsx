@@ -14,14 +14,33 @@ const ORGANIZATIONS: DanceOrganization[] = ["Nollningen", "Sexmästeriet", "Phus
 const MAX_UPLOAD_MB = 50;
 const LIGHT_COMPRESSION_THRESHOLD_MB = 0;
 
-const isSupabaseObjectTooLargeError = (message?: string) =>
-  !!message &&
-  message.toLowerCase().includes("exceeded the maximum allowed size");
-
 const isDancesRlsInsertError = (message?: string) =>
   !!message &&
   message.toLowerCase().includes("row-level security policy") &&
   message.toLowerCase().includes("table \"dances\"");
+
+async function uploadFileToR2(params: {
+  file: File | Blob;
+  kind: "video" | "thumbnail";
+  filename: string;
+}): Promise<{ key?: string; url: string }> {
+  const formData = new FormData();
+  formData.append("kind", params.kind);
+  formData.append("file", params.file, params.filename);
+
+  const response = await fetch("/api/upload/r2", {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = (await response.json()) as { key?: string; url?: string; error?: string };
+
+  if (!response.ok || !data.url) {
+    throw new Error(data.error ?? "R2-uppladdningen misslyckades.");
+  }
+
+  return { key: data.key, url: data.url };
+}
 
 const getSupabaseHost = () => {
   try {
@@ -161,8 +180,6 @@ export default function UploadForm() {
     setLoading(true);
 
     try {
-      const originalMB = videoFile!.size / 1024 / 1024;
-
       // ── 1. Komprimera video ──────────────────────────────────────────────
       let fileToUpload = videoFile!;
 
@@ -199,57 +216,27 @@ export default function UploadForm() {
         );
       }
 
-      // ── 2. Ladda upp video till Supabase Storage ─────────────────────────
+      // ── 2. Ladda upp video till Cloudflare R2 ────────────────────────────
       setStatusMsg("Laddar upp video…");
       setCompressionPct(null);
 
       const { data: { user } } = await supabase.auth.getUser();
-      const folder = user?.id ?? crypto.randomUUID();
       const uploadExt = fileToUpload.name.split(".").pop()?.toLowerCase() || "mp4";
-      const videoPath = `${folder}/${Date.now()}.${uploadExt}`;
-      const contentType = fileToUpload.type || "application/octet-stream";
-
-      const { error: uploadError } = await supabase.storage
-        .from("dance-videos")
-        .upload(videoPath, fileToUpload, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType,
-        });
-
-      if (uploadError && isSupabaseObjectTooLargeError(uploadError.message)) {
-        throw new Error(
-          "Videon är större än bucketens max object size i Supabase. " +
-          "Gratisplanen stödjer max 50 MB per fil. Prova igen så komprimeras videon hårdare."
-        );
-      }
-
-      if (uploadError) {
-        throw new Error(`Videouppladdning misslyckades: ${uploadError.message}`);
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from("dance-videos")
-        .getPublicUrl(videoPath);
+      const videoUpload = await uploadFileToR2({
+        file: fileToUpload,
+        kind: "video",
+        filename: `dance-video.${uploadExt}`,
+      });
 
       // ── 3.5 Ladda upp thumbnail (valfritt) ──────────────────────────────
       let thumbnailUrl: string | null = null;
       if (thumbnailBlob) {
-        const thumbPath = `${folder}/${Date.now()}-thumb.jpg`;
-        const { error: thumbError } = await supabase.storage
-          .from("dance-videos")
-          .upload(thumbPath, thumbnailBlob, {
-            cacheControl: "3600",
-            upsert: false,
-            contentType: "image/jpeg",
-          });
-
-        if (!thumbError) {
-          const { data: thumbPublic } = supabase.storage
-            .from("dance-videos")
-            .getPublicUrl(thumbPath);
-          thumbnailUrl = thumbPublic.publicUrl;
-        }
+        const thumbnailUpload = await uploadFileToR2({
+          file: thumbnailBlob,
+          kind: "thumbnail",
+          filename: "dance-thumbnail.jpg",
+        });
+        thumbnailUrl = thumbnailUpload.url ?? null;
       }
 
       // ── 4. Spara dans ────────────────────────────────────────────────────
@@ -269,7 +256,7 @@ export default function UploadForm() {
           dancer_names: form.dancer_names.trim(),
           artist: form.artist.trim() || null,
           spotify_url: form.spotify_url.trim() || null,
-          video_url: publicUrl,
+          video_url: videoUpload.url,
           thumbnail_url: thumbnailUrl,
           created_by: user?.id ?? null,
           status: "pending",

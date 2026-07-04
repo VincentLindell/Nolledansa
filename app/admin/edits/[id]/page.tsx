@@ -61,6 +61,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
 
   const currentKeys = new Set(currentSegments.map(segmentKey));
   const proposedKeys = new Set(proposedSegments.map(segmentKey));
+  const hasProposedVideo = !!request.video_url && request.video_url !== dance.video_url;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -101,6 +102,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
             <p className="text-xs text-gray-500">Nuvarande info</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Titel:</span> {dance.title}</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Sektion/år:</span> {sectionLabel(dance.section, dance.year)}</p>
+            <p className="text-sm text-gray-800"><span className="font-medium">Tillhör:</span> {dance.organization ?? "Nollningen"}</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Vilka dansar:</span> {dance.dancer_names}</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Låt:</span> {dance.song_title}{dance.artist ? ` · ${dance.artist}` : ""}</p>
           </div>
@@ -109,8 +111,21 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
             <p className="text-xs text-blue-700">Föreslagen info</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Titel:</span> {request.title}</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Sektion/år:</span> {sectionLabel(request.section, request.year)}</p>
+            <p className="text-sm text-gray-800"><span className="font-medium">Tillhör:</span> {request.organization ?? "Nollningen"}</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Vilka dansar:</span> {request.dancer_names}</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Låt:</span> {request.song_title}{request.artist ? ` · ${request.artist}` : ""}</p>
+            <div className="pt-2">
+              <p className="text-xs text-blue-700 mb-2">Video</p>
+              {hasProposedVideo ? (
+                <video
+                  src={request.video_url ?? undefined}
+                  controls
+                  className="w-full max-h-44 rounded-lg border border-blue-200 bg-black"
+                />
+              ) : (
+                <p className="text-sm text-gray-500">Ingen ny video föreslagen.</p>
+              )}
+            </div>
             <div className="pt-2">
               <p className="text-xs text-blue-700 mb-2">Thumbnail</p>
               {request.thumbnail_url ? (
@@ -226,3 +241,4 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
     </div>
   );
 }
+

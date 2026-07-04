@@ -59,11 +59,14 @@ create table if not exists public.dance_edit_requests (
   dance_id       uuid not null references public.dances(id) on delete cascade,
   title          text not null,
   section        text not null,
+  organization   text not null default 'Nollningen'
+    check (organization in ('Nollningen', 'Sexmästeriet', 'Festmästeriet', 'Phusk')),
   year           text not null,
   song_title     text not null,
   dancer_names   text not null default '',
   artist         text,
   spotify_url    text,
+  video_url      text,
   thumbnail_url  text,
   requester_note text,
   status         text not null default 'pending'

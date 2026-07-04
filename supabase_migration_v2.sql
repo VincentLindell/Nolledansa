@@ -138,17 +138,33 @@ CREATE TABLE IF NOT EXISTS public.dance_edit_requests (
   dance_id uuid NOT NULL REFERENCES public.dances(id) ON DELETE CASCADE,
   title text NOT NULL,
   section text NOT NULL,
+  organization text NOT NULL DEFAULT 'Nollningen'
+    CHECK (organization IN ('Nollningen', 'Sexmästeriet', 'Festmästeriet', 'Phusk')),
   year text NOT NULL,
   song_title text NOT NULL,
   dancer_names text NOT NULL DEFAULT '',
   artist text,
   spotify_url text,
+  video_url text,
   thumbnail_url text,
   requester_note text,
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'approved', 'rejected')),
   resolved_at timestamptz
 );
+
+ALTER TABLE public.dance_edit_requests
+  ADD COLUMN IF NOT EXISTS organization text NOT NULL DEFAULT 'Nollningen';
+
+ALTER TABLE public.dance_edit_requests
+  DROP CONSTRAINT IF EXISTS dance_edit_requests_organization_check;
+
+ALTER TABLE public.dance_edit_requests
+  ADD CONSTRAINT dance_edit_requests_organization_check
+  CHECK (organization IN ('Nollningen', 'Sexmästeriet', 'Festmästeriet', 'Phusk'));
+
+ALTER TABLE public.dance_edit_requests
+  ADD COLUMN IF NOT EXISTS video_url text;
 
 ALTER TABLE public.dance_edit_requests
   ADD COLUMN IF NOT EXISTS thumbnail_url text;
