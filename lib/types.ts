@@ -14,6 +14,7 @@ export type DanceOrganization = "Nollningen" | "Sexmästeriet" | "Festmästeriet
 
 export type DanceStatus = "pending" | "approved" | "rejected";
 export type DanceEditRequestStatus = "pending" | "approved" | "rejected";
+export type DanceEditRequestType = "edit" | "delete";
 export type SectionChantStatus = "pending" | "approved" | "rejected";
 
 export interface Dance {
@@ -68,6 +69,7 @@ export interface DanceEditRequest {
   id: string;
   created_at: string;
   dance_id: string;
+  request_type?: DanceEditRequestType | null;
   title: string;
   section: Section;
   organization: DanceOrganization | null;

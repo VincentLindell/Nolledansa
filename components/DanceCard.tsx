@@ -47,7 +47,9 @@ export default function DanceCard({ dance, showTrending = false }: DanceCardProp
         <div className="p-4">
           <div className="space-y-2">
             <p
-              className="text-2xl sm:text-3xl font-extrabold tracking-tight transition-colors leading-none"
+              className={`text-2xl sm:text-3xl font-extrabold tracking-tight transition-colors leading-none ${
+                theme.normalized === "E" ? "section-label-e" : ""
+              }`}
               style={{ color: theme.labelColor }}
             >
               {sectionLabelWithOrganization(dance.section, dance.year, dance.organization)}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, Loader2, PencilLine, Upload } from "lucide-react";
+import { CheckCircle2, ChevronDown, Loader2, PencilLine, Trash2, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import SegmentForm from "@/components/SegmentForm";
 import {
@@ -82,8 +82,12 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
   const [open, setOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [requesterNote, setRequesterNote] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [compressionPct, setCompressionPct] = useState<number | null>(null);
@@ -379,6 +383,7 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
           video_url: requestVideoUrl,
           thumbnail_url: requestThumbnailUrl,
           requester_note: requesterNote.trim() || null,
+          request_type: "edit",
           status: "pending",
         });
 
@@ -419,6 +424,14 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
         );
       } else if (
         message.toLowerCase().includes("schema cache") &&
+        message.includes("request_type") &&
+        message.includes("dance_edit_requests")
+      ) {
+        setError(
+          "Databasen saknar kolumnen request_type på dance_edit_requests. Kör senaste SQL-migrationen i Supabase SQL Editor och vänta någon minut på att schema-cachen uppdateras."
+        );
+      } else if (
+        message.toLowerCase().includes("schema cache") &&
         message.includes("video_url") &&
         message.includes("dance_edit_requests")
       ) {
@@ -446,6 +459,67 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
     }
   };
 
+  const handleDeleteRequest = async () => {
+    setDeleteError(null);
+    setError(null);
+    setDeleteSuccess(false);
+
+    if (!deleteConfirm) {
+      setDeleteError("Kryssa i att du förstår att dansen tas bort om admin godkänner.");
+      return;
+    }
+
+    setDeleteLoading(true);
+
+    try {
+      const { error: requestError } = await supabase
+        .from("dance_edit_requests")
+        .insert({
+          id: crypto.randomUUID(),
+          dance_id: dance.id,
+          request_type: "delete",
+          title: dance.title,
+          section: dance.section,
+          organization: dance.organization ?? "Nollningen",
+          year: dance.year,
+          song_title: dance.song_title,
+          dancer_names: dance.dancer_names ?? "",
+          artist: dance.artist,
+          spotify_url: dance.spotify_url,
+          video_url: dance.video_url,
+          thumbnail_url: dance.thumbnail_url,
+          requester_note: requesterNote.trim() || "Användaren vill ta bort dansen.",
+          status: "pending",
+        });
+
+      if (requestError) {
+        throw new Error(requestError.message);
+      }
+
+      setDeleteSuccess(true);
+      setOpen(false);
+    } catch (deleteRequestError) {
+      const message = deleteRequestError instanceof Error ? deleteRequestError.message : "";
+      if (
+        message.toLowerCase().includes("schema cache") &&
+        message.includes("request_type") &&
+        message.includes("dance_edit_requests")
+      ) {
+        setDeleteError(
+          "Databasen saknar kolumnen request_type på dance_edit_requests. Kör senaste SQL-migrationen i Supabase och försök igen."
+        );
+      } else if (message.toLowerCase().includes("row-level security policy")) {
+        setDeleteError(
+          "Supabase blockerade borttagningsbegäran via RLS. Kör senaste SQL-migration i Supabase och försök igen."
+        );
+      } else {
+        setDeleteError(message || "Kunde inte skicka borttagningsbegäran.");
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -470,6 +544,13 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4" />
           Ditt ändringsförslag är inskickat och väntar nu på granskning.
+        </div>
+      )}
+
+      {deleteSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          Din borttagningsbegäran är inskickad och väntar nu på granskning.
         </div>
       )}
 
@@ -788,6 +869,52 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
               "Skicka ändringsförslag"
             )}
           </button>
+
+          <section className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <Trash2 className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h2 className="text-base font-semibold text-red-700">Ta bort dans</h2>
+                <p className="text-sm text-red-700">
+                  Skicka en begäran till admin om att ta bort den här dansen från hemsidan.
+                  Dansen försvinner först när admin godkänner begäran.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2 text-sm text-red-700">
+              <input
+                type="checkbox"
+                checked={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.checked)}
+                disabled={deleteLoading || loading}
+                className="mt-1 w-4 h-4 accent-red-600"
+              />
+              Jag förstår att dansen tas bort från hemsidan om admin godkänner.
+            </label>
+
+            {deleteError && (
+              <p className="text-sm text-red-700 bg-white border border-red-200 rounded-lg px-3 py-2">
+                {deleteError}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDeleteRequest}
+              disabled={deleteLoading || loading}
+              className="w-full border border-red-300 bg-white hover:bg-red-100 disabled:opacity-60 text-red-700 font-medium py-3 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              {deleteLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                  Skickar borttagningsbegäran…
+                </>
+              ) : (
+                "Begär borttagning"
+              )}
+            </button>
+          </section>
         </form>
       )}
     </div>

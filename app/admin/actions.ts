@@ -64,6 +64,30 @@ export async function approveEditRequest(requestId: string) {
 
   const request = requestResult.data as DanceEditRequest;
   const requestSegments = (requestSegmentsResult.data ?? []) as DanceEditRequestSegment[];
+  const requestType = request.request_type ?? "edit";
+
+  if (requestType === "delete") {
+    await admin.from("dance_segments").delete().eq("dance_id", request.dance_id);
+
+    const { error: danceDeleteError } = await admin
+      .from("dances")
+      .update({ status: "rejected" })
+      .eq("id", request.dance_id);
+
+    if (danceDeleteError) throw new Error(danceDeleteError.message);
+
+    const { error: requestUpdateError } = await admin
+      .from("dance_edit_requests")
+      .update({
+        status: "approved",
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("id", requestId);
+
+    if (requestUpdateError) throw new Error(requestUpdateError.message);
+
+    redirect("/admin");
+  }
 
   const { error: danceUpdateError } = await admin
     .from("dances")

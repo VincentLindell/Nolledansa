@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowLeft, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, Trash2, XCircle } from "lucide-react";
 import { isAdmin } from "@/lib/supabase/auth-helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -62,6 +62,8 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
   const currentKeys = new Set(currentSegments.map(segmentKey));
   const proposedKeys = new Set(proposedSegments.map(segmentKey));
   const hasProposedVideo = !!request.video_url && request.video_url !== dance.video_url;
+  const requestType = request.request_type ?? "edit";
+  const isDeleteRequest = requestType === "delete";
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -78,7 +80,8 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Ändringsförslag</h1>
             <p className="text-sm text-gray-500 mt-1">
-              För dansen {sectionLabel(dance.section, dance.year)} · {dance.title}
+              {isDeleteRequest ? "Borttagningsbegäran för" : "För dansen"}{" "}
+              {sectionLabel(dance.section, dance.year)} · {dance.title}
             </p>
           </div>
           <span className="text-xs font-medium px-2 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
@@ -90,6 +93,18 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
           </span>
         </div>
 
+        {isDeleteRequest && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700 flex items-start gap-3">
+            <Trash2 className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Användaren vill ta bort den här dansen.</p>
+              <p className="mt-1">
+                Om du godkänner tas dansen bort från hemsidan genom att status sätts till rejected.
+              </p>
+            </div>
+          </div>
+        )}
+
         {request.requester_note && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
             <p className="text-xs text-gray-500 mb-1">Kommentar från användare</p>
@@ -97,7 +112,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 ${isDeleteRequest ? "" : "md:grid-cols-2"} gap-4`}>
           <div className="border border-gray-200 rounded-lg p-4 space-y-2">
             <p className="text-xs text-gray-500">Nuvarande info</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Titel:</span> {dance.title}</p>
@@ -107,6 +122,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
             <p className="text-sm text-gray-800"><span className="font-medium">Låt:</span> {dance.song_title}{dance.artist ? ` · ${dance.artist}` : ""}</p>
           </div>
 
+          {!isDeleteRequest && (
           <div className="border border-blue-200 rounded-lg p-4 space-y-2 bg-blue-50/40">
             <p className="text-xs text-blue-700">Föreslagen info</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Titel:</span> {request.title}</p>
@@ -140,9 +156,11 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
 
+      {!isDeleteRequest && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-3">Nuvarande dansdelar</h2>
@@ -202,6 +220,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+      )}
 
       {request.status === "pending" && (
         <div className="flex gap-3">
@@ -217,7 +236,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
               className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-3 rounded-xl text-sm transition-colors"
             >
               <CheckCircle className="w-4 h-4" />
-              Godkänn ändring
+              {isDeleteRequest ? "Godkänn borttagning" : "Godkänn ändring"}
             </button>
           </form>
 
@@ -233,7 +252,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
               className="w-full flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 rounded-xl text-sm transition-colors"
             >
               <XCircle className="w-4 h-4" />
-              Neka ändring
+              {isDeleteRequest ? "Neka borttagning" : "Neka ändring"}
             </button>
           </form>
         </div>

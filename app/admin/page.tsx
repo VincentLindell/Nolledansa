@@ -5,7 +5,7 @@ import { sectionLabel } from "@/lib/utils";
 import Link from "next/link";
 import AdminLoginForm from "@/components/AdminLoginForm";
 import { approveSectionChant, rejectSectionChant } from "./actions";
-import { ShieldCheck, Clock, Music, PencilLine, MessageSquareText } from "lucide-react";
+import { ShieldCheck, Clock, Music, PencilLine, MessageSquareText, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -110,6 +110,8 @@ export default async function AdminPage() {
               <div className="space-y-2">
                 {editRequests.map((request) => {
                   const targetDance = requestDanceMap.get(request.dance_id);
+                  const isDeleteRequest = (request.request_type ?? "edit") === "delete";
+                  const RequestIcon = isDeleteRequest ? Trash2 : PencilLine;
                   return (
                     <Link
                       key={request.id}
@@ -117,7 +119,7 @@ export default async function AdminPage() {
                       className="flex items-center justify-between gap-4 bg-white border border-gray-200 rounded-xl px-5 py-4 hover:border-purple-300 hover:shadow-sm transition-all"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <PencilLine className="w-5 h-5 text-gray-400 shrink-0" />
+                        <RequestIcon className="w-5 h-5 text-gray-400 shrink-0" />
                         <div className="min-w-0">
                           <p className="font-medium text-gray-900 truncate">
                             {targetDance?.title ?? request.title}
@@ -125,13 +127,20 @@ export default async function AdminPage() {
                           <p className="text-xs text-gray-500">
                             {(targetDance
                               ? sectionLabel(targetDance.section, targetDance.year)
-                              : sectionLabel(request.section, request.year)) + " · Ändringsförslag"}
+                              : sectionLabel(request.section, request.year)) +
+                              (isDeleteRequest ? " · Borttagningsbegäran" : " · Ändringsförslag")}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full">
-                          Ändring
+                        <span
+                          className={`text-xs border px-2 py-1 rounded-full ${
+                            isDeleteRequest
+                              ? "text-red-700 bg-red-50 border-red-200"
+                              : "text-blue-700 bg-blue-50 border-blue-200"
+                          }`}
+                        >
+                          {isDeleteRequest ? "Borttagning" : "Ändring"}
                         </span>
                         <span className="text-xs text-gray-400">
                           {new Date(request.created_at).toLocaleDateString("sv-SE")}

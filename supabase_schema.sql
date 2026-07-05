@@ -57,6 +57,8 @@ create table if not exists public.dance_edit_requests (
   id             uuid primary key default gen_random_uuid(),
   created_at     timestamptz not null default now(),
   dance_id       uuid not null references public.dances(id) on delete cascade,
+  request_type   text not null default 'edit'
+    check (request_type in ('edit', 'delete')),
   title          text not null,
   section        text not null,
   organization   text not null default 'Nollningen'
