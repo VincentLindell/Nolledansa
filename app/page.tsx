@@ -11,6 +11,19 @@ interface HomeProps {
   searchParams: Promise<{ q?: string }>;
 }
 
+export const dynamic = "force-dynamic";
+
+function shuffleDances(dances: Dance[]) {
+  const shuffled = [...dances];
+
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  return shuffled;
+}
+
 async function getTrendingDances(): Promise<TrendingDance[]> {
   const supabase = await createClient();
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -69,15 +82,14 @@ async function searchDances(query: string): Promise<Dance[]> {
   return (data ?? []) as Dance[];
 }
 
-async function getRecentDances(): Promise<Dance[]> {
+async function getRandomDances(): Promise<Dance[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("dances")
     .select("*")
-    .eq("status", "approved")
-    .order("created_at", { ascending: false })
-    .limit(12);
-  return (data ?? []) as Dance[];
+    .eq("status", "approved");
+
+  return shuffleDances((data ?? []) as Dance[]).slice(0, 12);
 }
 
 async function getCurrentYearDances(): Promise<Dance[]> {
@@ -104,7 +116,7 @@ export default async function HomePage({ searchParams }: HomeProps) {
   const [trending, yearlyDances, dances] = await Promise.all([
     getTrendingDances(),
     query ? Promise.resolve([] as Dance[]) : getCurrentYearDances(),
-    query ? searchDances(query) : getRecentDances(),
+    query ? searchDances(query) : getRandomDances(),
   ]);
 
   return (

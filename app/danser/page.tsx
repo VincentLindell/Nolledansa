@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Filter, Music2, X } from "lucide-react";
+import { ArrowUpDown, Filter, Music2, X } from "lucide-react";
 import DanceCard from "@/components/DanceCard";
 import { createClient } from "@/lib/supabase/server";
 import { Dance, DanceOrganization, Section } from "@/lib/types";
@@ -15,12 +15,20 @@ const ORGANIZATIONS: DanceOrganization[] = [
   "Sexmästeriet",
   "Phusk",
 ];
+const SORT_OPTIONS = [
+  { value: "section", label: "Sektion" },
+  { value: "newest", label: "Nya först" },
+  { value: "oldest", label: "Äldst först" },
+] as const;
+
+type DanceSort = (typeof SORT_OPTIONS)[number]["value"];
 
 interface DancesPageProps {
   searchParams: Promise<{
     section?: string | string[];
     year?: string | string[];
     organization?: string | string[];
+    sort?: string | string[];
   }>;
 }
 
@@ -37,17 +45,38 @@ function getParamValues(value?: string | string[]) {
   return values.map((item) => item.trim()).filter(Boolean);
 }
 
+function isDanceSort(value: string): value is DanceSort {
+  return SORT_OPTIONS.some((option) => option.value === value);
+}
+
 async function getDances(filters: {
   sections: Section[];
   years: string[];
   organizations: DanceOrganization[];
+  sort: DanceSort;
 }): Promise<Dance[]> {
   const supabase = await createClient();
   let query = supabase
     .from("dances")
     .select("*")
-    .eq("status", "approved")
-    .order("created_at", { ascending: false });
+    .eq("status", "approved");
+
+  if (filters.sort === "section") {
+    query = query
+      .order("section", { ascending: true })
+      .order("year", { ascending: false })
+      .order("created_at", { ascending: false });
+  } else if (filters.sort === "oldest") {
+    query = query
+      .order("year", { ascending: true })
+      .order("section", { ascending: true })
+      .order("created_at", { ascending: false });
+  } else {
+    query = query
+      .order("year", { ascending: false })
+      .order("section", { ascending: true })
+      .order("created_at", { ascending: false });
+  }
 
   if (filters.sections.length > 0) {
     query = query.in("section", filters.sections);
@@ -81,12 +110,15 @@ export default async function DancesPage({ searchParams }: DancesPageProps) {
   const selectedSections = getParamValues(params.section).filter(isSection);
   const selectedYears = getParamValues(params.year);
   const selectedOrganizations = getParamValues(params.organization).filter(isOrganization);
+  const requestedSort = getParamValues(params.sort)[0];
+  const selectedSort: DanceSort = isDanceSort(requestedSort) ? requestedSort : "newest";
 
   const [dances, years] = await Promise.all([
     getDances({
       sections: selectedSections,
       years: selectedYears,
       organizations: selectedOrganizations,
+      sort: selectedSort,
     }),
     getAvailableYears(),
   ]);
@@ -122,7 +154,7 @@ export default async function DancesPage({ searchParams }: DancesPageProps) {
           <h2 className="text-sm font-semibold text-gray-900">Filter</h2>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1fr_auto] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1fr_1fr_auto] gap-4">
           <div>
             <p className="block text-xs text-gray-500 mb-2">Sektion</p>
             <div className="flex flex-wrap gap-2">
@@ -181,6 +213,30 @@ export default async function DancesPage({ searchParams }: DancesPageProps) {
                     className="w-4 h-4 accent-purple-600"
                   />
                   {organization}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              Sortera
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {SORT_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className="inline-flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-white"
+                >
+                  <input
+                    type="radio"
+                    name="sort"
+                    value={option.value}
+                    defaultChecked={selectedSort === option.value}
+                    className="w-4 h-4 accent-purple-600"
+                  />
+                  {option.label}
                 </label>
               ))}
             </div>

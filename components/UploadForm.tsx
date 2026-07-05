@@ -93,6 +93,18 @@ export default function UploadForm() {
     };
   }, [videoPreviewUrl, thumbnailPreviewUrl]);
 
+  useEffect(() => {
+    if (!loading) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [loading]);
+
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -618,6 +630,16 @@ export default function UploadForm() {
             "Ladda upp dans"
           )}
         </button>
+
+        {loading && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p className="font-medium">Stanna kvar på sidan tills uppladdningen är klar.</p>
+            <p className="mt-1">
+              Om du byter sida, stänger fliken eller laddar om sidan avbryts komprimeringen eller
+              uppladdningen.
+            </p>
+          </div>
+        )}
       </div>
     </form>
   );
