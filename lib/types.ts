@@ -12,9 +12,9 @@ export type Section =
 
 export type DanceOrganization = "Nollningen" | "Sexmästeriet" | "Festmästeriet" | "Phusk";
 
-export type DanceStatus = "pending" | "approved" | "rejected";
+export type DanceStatus = "pending" | "approved" | "rejected" | "hidden";
 export type DanceEditRequestStatus = "pending" | "approved" | "rejected";
-export type DanceEditRequestType = "edit" | "delete";
+export type DanceEditRequestType = "edit" | "delete" | "hide";
 export type SectionChantStatus = "pending" | "approved" | "rejected";
 
 export interface Dance {
@@ -32,6 +32,9 @@ export interface Dance {
   thumbnail_url: string | null;
   created_by: string | null;
   status: DanceStatus;
+  hidden_until: string | null;
+  hidden_note: string | null;
+  hidden_at: string | null;
   // joined from dance_clicks aggregate
   view_count?: number;
   dance_clicks?: { count: number }[];
@@ -81,6 +84,8 @@ export interface DanceEditRequest {
   video_url: string | null;
   thumbnail_url: string | null;
   requester_note: string | null;
+  hide_until: string | null;
+  hide_indefinitely: boolean | null;
   status: DanceEditRequestStatus;
   resolved_at: string | null;
 }

@@ -89,6 +89,32 @@ export async function approveEditRequest(requestId: string) {
     redirect("/admin");
   }
 
+  if (requestType === "hide") {
+    const { error: danceHideError } = await admin
+      .from("dances")
+      .update({
+        status: "hidden",
+        hidden_until: request.hide_indefinitely ? null : request.hide_until,
+        hidden_note: request.requester_note,
+        hidden_at: new Date().toISOString(),
+      })
+      .eq("id", request.dance_id);
+
+    if (danceHideError) throw new Error(danceHideError.message);
+
+    const { error: requestUpdateError } = await admin
+      .from("dance_edit_requests")
+      .update({
+        status: "approved",
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("id", requestId);
+
+    if (requestUpdateError) throw new Error(requestUpdateError.message);
+
+    redirect("/admin");
+  }
+
   const { error: danceUpdateError } = await admin
     .from("dances")
     .update({
@@ -160,6 +186,28 @@ export async function rejectEditRequest(requestId: string) {
   if (error) throw new Error(error.message);
 
   redirect("/admin");
+}
+
+export async function restoreHiddenDance(danceId: string) {
+  if (!(await isAdmin())) {
+    throw new Error("Obehörig");
+  }
+
+  const admin = createAdminClient();
+
+  const { error } = await admin
+    .from("dances")
+    .update({
+      status: "approved",
+      hidden_until: null,
+      hidden_note: null,
+      hidden_at: null,
+    })
+    .eq("id", danceId);
+
+  if (error) throw new Error(error.message);
+
+  redirect("/admin?tab=hidden");
 }
 
 export async function approveSectionChant(chantId: string) {

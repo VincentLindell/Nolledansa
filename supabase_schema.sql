@@ -23,7 +23,12 @@ create table if not exists public.dances (
   spotify_url   text,
   video_url     text not null,
   thumbnail_url text,
-  created_by    uuid references auth.users(id) on delete set null
+  created_by    uuid references auth.users(id) on delete set null,
+  status        text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected', 'hidden')),
+  hidden_until  date,
+  hidden_note   text,
+  hidden_at     timestamptz
 );
 
 -- ============================================================
@@ -58,7 +63,7 @@ create table if not exists public.dance_edit_requests (
   created_at     timestamptz not null default now(),
   dance_id       uuid not null references public.dances(id) on delete cascade,
   request_type   text not null default 'edit'
-    check (request_type in ('edit', 'delete')),
+    check (request_type in ('edit', 'delete', 'hide')),
   title          text not null,
   section        text not null,
   organization   text not null default 'Nollningen'
@@ -71,6 +76,8 @@ create table if not exists public.dance_edit_requests (
   video_url      text,
   thumbnail_url  text,
   requester_note text,
+  hide_until     date,
+  hide_indefinitely boolean not null default false,
   status         text not null default 'pending'
     check (status in ('pending', 'approved', 'rejected')),
   resolved_at    timestamptz
@@ -116,7 +123,7 @@ alter table public.dances enable row level security;
 
 create policy "Anyone can view dances"
   on public.dances for select
-  using (true);
+  using (status = 'approved');
 
 create policy "Authenticated users can insert dances"
   on public.dances for insert

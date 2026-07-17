@@ -4,8 +4,8 @@ import { Dance, DanceEditRequest, SectionChant } from "@/lib/types";
 import { sectionLabel } from "@/lib/utils";
 import Link from "next/link";
 import AdminLoginForm from "@/components/AdminLoginForm";
-import { approveSectionChant, rejectSectionChant } from "./actions";
-import { ShieldCheck, Clock, Music, PencilLine, MessageSquareText, Trash2 } from "lucide-react";
+import { approveSectionChant, rejectSectionChant, restoreHiddenDance } from "./actions";
+import { ShieldCheck, Clock, Eye, EyeOff, Music, PencilLine, MessageSquareText, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -15,7 +15,11 @@ export const metadata: Metadata = {
 // Tvinga dynamic rendering (ingen caching)
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+interface AdminPageProps {
+  searchParams?: Promise<{ tab?: string }>;
+}
+
+export default async function AdminPage({ searchParams }: AdminPageProps) {
   const admin = await isAdmin();
 
   if (!admin) {
@@ -23,8 +27,15 @@ export default async function AdminPage() {
   }
 
   const supabase = createAdminClient();
+  const params = await searchParams;
+  const activeTab = params?.tab === "hidden" ? "hidden" : "pending";
 
-  const [{ data: pending }, { data: pendingEditRequests }, { data: pendingSectionChants }] = await Promise.all([
+  const [
+    { data: pending },
+    { data: pendingEditRequests },
+    { data: pendingSectionChants },
+    { data: hiddenDances },
+  ] = await Promise.all([
     supabase
       .from("dances")
       .select("*")
@@ -40,11 +51,17 @@ export default async function AdminPage() {
       .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: true }),
+    supabase
+      .from("dances")
+      .select("*")
+      .eq("status", "hidden")
+      .order("hidden_at", { ascending: false }),
   ]);
 
   const dances = (pending ?? []) as Dance[];
   const editRequests = (pendingEditRequests ?? []) as DanceEditRequest[];
   const sectionChants = (pendingSectionChants ?? []) as SectionChant[];
+  const hidden = (hiddenDances ?? []) as Dance[];
 
   const danceIdsForRequests = [...new Set(editRequests.map((r) => r.dance_id))];
   const { data: requestDances } = danceIdsForRequests.length
@@ -64,7 +81,89 @@ export default async function AdminPage() {
         <h1 className="text-2xl font-bold text-gray-900">Admin-panel</h1>
       </div>
 
-      {hasPendingItems ? (
+      <div className="flex gap-2 border-b border-gray-200">
+        <Link
+          href="/admin"
+          className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "pending"
+              ? "border-purple-600 text-purple-700"
+              : "border-transparent text-gray-500 hover:text-gray-800"
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          Ärenden
+        </Link>
+        <Link
+          href="/admin?tab=hidden"
+          className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "hidden"
+              ? "border-purple-600 text-purple-700"
+              : "border-transparent text-gray-500 hover:text-gray-800"
+          }`}
+        >
+          <EyeOff className="w-4 h-4" />
+          Gömda danser
+        </Link>
+      </div>
+
+      {activeTab === "hidden" ? (
+        hidden.length > 0 ? (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              {hidden.length} gömd{hidden.length !== 1 ? "a" : ""} dans{hidden.length !== 1 ? "er" : ""}.
+            </p>
+            <div className="space-y-3">
+              {hidden.map((dance) => (
+                <div
+                  key={dance.id}
+                  className="bg-white border border-gray-200 rounded-xl px-5 py-4 space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <EyeOff className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-medium text-gray-900 truncate">{dance.title}</p>
+                        <p className="text-xs text-gray-500">
+                          {sectionLabel(dance.section, dance.year)} · {dance.song_title}
+                          {dance.artist ? ` · ${dance.artist}` : ""}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Visa igen: {dance.hidden_until ? new Date(dance.hidden_until).toLocaleDateString("sv-SE") : "Tills vidare"}
+                          {dance.hidden_at ? ` · Gömd ${new Date(dance.hidden_at).toLocaleDateString("sv-SE")}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full shrink-0">
+                      Gömd
+                    </span>
+                  </div>
+
+                  {dance.hidden_note && (
+                    <p className="whitespace-pre-line text-sm leading-6 text-gray-700 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                      {dance.hidden_note}
+                    </p>
+                  )}
+
+                  <form action={restoreHiddenDance.bind(null, dance.id)}>
+                    <button
+                      type="submit"
+                      className="w-full inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Visa dans igen
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">
+            <EyeOff className="mx-auto w-10 h-10 mb-3 opacity-50" />
+            <p>Inga danser är gömda.</p>
+          </div>
+        )
+      ) : hasPendingItems ? (
         <div className="space-y-8">
           {dances.length > 0 && (
             <div className="space-y-2">
@@ -110,8 +209,15 @@ export default async function AdminPage() {
               <div className="space-y-2">
                 {editRequests.map((request) => {
                   const targetDance = requestDanceMap.get(request.dance_id);
-                  const isDeleteRequest = (request.request_type ?? "edit") === "delete";
-                  const RequestIcon = isDeleteRequest ? Trash2 : PencilLine;
+                  const requestType = request.request_type ?? "edit";
+                  const isDeleteRequest = requestType === "delete";
+                  const isHideRequest = requestType === "hide";
+                  const RequestIcon = isDeleteRequest ? Trash2 : isHideRequest ? EyeOff : PencilLine;
+                  const requestLabel = isDeleteRequest
+                    ? "Borttagningsbegäran"
+                    : isHideRequest
+                      ? "Gömningsbegäran"
+                      : "Ändringsförslag";
                   return (
                     <Link
                       key={request.id}
@@ -128,7 +234,7 @@ export default async function AdminPage() {
                             {(targetDance
                               ? sectionLabel(targetDance.section, targetDance.year)
                               : sectionLabel(request.section, request.year)) +
-                              (isDeleteRequest ? " · Borttagningsbegäran" : " · Ändringsförslag")}
+                              ` · ${requestLabel}`}
                           </p>
                         </div>
                       </div>
@@ -137,10 +243,12 @@ export default async function AdminPage() {
                           className={`text-xs border px-2 py-1 rounded-full ${
                             isDeleteRequest
                               ? "text-red-700 bg-red-50 border-red-200"
+                              : isHideRequest
+                                ? "text-amber-700 bg-amber-50 border-amber-200"
                               : "text-blue-700 bg-blue-50 border-blue-200"
                           }`}
                         >
-                          {isDeleteRequest ? "Borttagning" : "Ändring"}
+                          {isDeleteRequest ? "Borttagning" : isHideRequest ? "Gömning" : "Ändring"}
                         </span>
                         <span className="text-xs text-gray-400">
                           {new Date(request.created_at).toLocaleDateString("sv-SE")}

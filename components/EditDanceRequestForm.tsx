@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, Loader2, PencilLine, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, ChevronDown, EyeOff, Loader2, PencilLine, Trash2, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import SegmentForm from "@/components/SegmentForm";
 import {
@@ -83,11 +83,17 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [hideLoading, setHideLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [hideError, setHideError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [hideSuccess, setHideSuccess] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [hideIndefinitely, setHideIndefinitely] = useState(false);
+  const [hideUntil, setHideUntil] = useState("");
+  const [hideNote, setHideNote] = useState("");
   const [requesterNote, setRequesterNote] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [compressionPct, setCompressionPct] = useState<number | null>(null);
@@ -520,6 +526,79 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
     }
   };
 
+  const handleHideRequest = async () => {
+    setHideError(null);
+    setError(null);
+    setHideSuccess(false);
+
+    if (!hideIndefinitely && !hideUntil) {
+      setHideError("Välj ett datum då dansen ska visas igen, eller välj tills vidare.");
+      return;
+    }
+
+    if (!hideNote.trim()) {
+      setHideError("Skriv en kommentar till admin.");
+      return;
+    }
+
+    setHideLoading(true);
+
+    try {
+      const { error: requestError } = await supabase
+        .from("dance_edit_requests")
+        .insert({
+          id: crypto.randomUUID(),
+          dance_id: dance.id,
+          request_type: "hide",
+          title: dance.title,
+          section: dance.section,
+          organization: dance.organization ?? "Nollningen",
+          year: dance.year,
+          song_title: dance.song_title,
+          dancer_names: dance.dancer_names ?? "",
+          artist: dance.artist,
+          spotify_url: dance.spotify_url,
+          video_url: dance.video_url,
+          thumbnail_url: dance.thumbnail_url,
+          requester_note: hideNote.trim(),
+          hide_until: hideIndefinitely ? null : hideUntil,
+          hide_indefinitely: hideIndefinitely,
+          status: "pending",
+        });
+
+      if (requestError) {
+        throw new Error(requestError.message);
+      }
+
+      setHideSuccess(true);
+      setHideUntil("");
+      setHideNote("");
+      setHideIndefinitely(false);
+      setOpen(false);
+    } catch (hideRequestError) {
+      const message = hideRequestError instanceof Error ? hideRequestError.message : "";
+      if (
+        message.toLowerCase().includes("schema cache") &&
+        (message.includes("request_type") ||
+          message.includes("hide_until") ||
+          message.includes("hide_indefinitely")) &&
+        message.includes("dance_edit_requests")
+      ) {
+        setHideError(
+          "Databasen saknar kolumner för gömningsbegäran. Kör senaste SQL-migrationen i Supabase och försök igen."
+        );
+      } else if (message.toLowerCase().includes("row-level security policy")) {
+        setHideError(
+          "Supabase blockerade gömningsbegäran via RLS. Kör senaste SQL-migration i Supabase och försök igen."
+        );
+      } else {
+        setHideError(message || "Kunde inte skicka gömningsbegäran.");
+      }
+    } finally {
+      setHideLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -551,6 +630,13 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4" />
           Din borttagningsbegäran är inskickad och väntar nu på granskning.
+        </div>
+      )}
+
+      {hideSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          Din gömningsbegäran är inskickad och väntar nu på granskning.
         </div>
       )}
 
@@ -870,53 +956,130 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
             )}
           </button>
 
-          <section className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
-            <div className="flex items-start gap-3">
-              <Trash2 className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold text-red-700">Ta bort dans</h2>
-                <p className="text-sm text-red-700">
-                  Skicka en begäran till admin om att ta bort den här dansen från hemsidan.
-                  Dansen försvinner först när admin godkänner begäran.
-                </p>
-              </div>
-            </div>
-
-            <label className="flex items-start gap-2 text-sm text-red-700">
-              <input
-                type="checkbox"
-                checked={deleteConfirm}
-                onChange={(e) => setDeleteConfirm(e.target.checked)}
-                disabled={deleteLoading || loading}
-                className="mt-1 w-4 h-4 accent-red-600"
-              />
-              Jag förstår att dansen tas bort från hemsidan om admin godkänner.
-            </label>
-
-            {deleteError && (
-              <p className="text-sm text-red-700 bg-white border border-red-200 rounded-lg px-3 py-2">
-                {deleteError}
-              </p>
-            )}
-
-            <button
-              type="button"
-              onClick={handleDeleteRequest}
-              disabled={deleteLoading || loading}
-              className="w-full border border-red-300 bg-white hover:bg-red-100 disabled:opacity-60 text-red-700 font-medium py-3 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-            >
-              {deleteLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                  Skickar borttagningsbegäran…
-                </>
-              ) : (
-                "Begär borttagning"
-              )}
-            </button>
-          </section>
         </form>
       )}
+
+      <section className="border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <EyeOff className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-amber-800">Göm dans</h2>
+            <p className="text-sm text-amber-800">
+              Skicka en begäran till admin om att tillfälligt gömma den här dansen från hemsidan.
+              Dansen göms först när admin godkänner begäran.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm text-amber-900">Visa igen</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input
+              type="date"
+              value={hideUntil}
+              onChange={(e) => {
+                setHideUntil(e.target.value);
+                if (e.target.value) setHideIndefinitely(false);
+              }}
+              disabled={hideLoading || loading || hideIndefinitely}
+              className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-amber-100/70"
+            />
+            <label className="flex items-center gap-2 text-sm text-amber-800 border border-amber-200 rounded-lg px-3 py-2 bg-white/70">
+              <input
+                type="checkbox"
+                checked={hideIndefinitely}
+                onChange={(e) => {
+                  setHideIndefinitely(e.target.checked);
+                  if (e.target.checked) setHideUntil("");
+                }}
+                disabled={hideLoading || loading}
+                className="w-4 h-4 accent-amber-600"
+              />
+              Tills vidare
+            </label>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm text-amber-900">Kommentar till admin *</label>
+          <textarea
+            value={hideNote}
+            onChange={(e) => setHideNote(e.target.value)}
+            rows={3}
+            placeholder="Beskriv varför dansen bör gömmas."
+            disabled={hideLoading || loading}
+            className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+        </div>
+
+        {hideError && (
+          <p className="text-sm text-amber-800 bg-white border border-amber-200 rounded-lg px-3 py-2">
+            {hideError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleHideRequest}
+          disabled={hideLoading || loading}
+          className="w-full border border-amber-300 bg-white hover:bg-amber-100 disabled:opacity-60 text-amber-800 font-medium py-3 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+        >
+          {hideLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              Skickar gömningsbegäran...
+            </>
+          ) : (
+            "Begär gömning"
+          )}
+        </button>
+      </section>
+
+      <section className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <Trash2 className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-red-700">Ta bort dans</h2>
+            <p className="text-sm text-red-700">
+              Skicka en begäran till admin om att ta bort den här dansen från hemsidan.
+              Dansen försvinner först när admin godkänner begäran.
+            </p>
+          </div>
+        </div>
+
+        <label className="flex items-start gap-2 text-sm text-red-700">
+          <input
+            type="checkbox"
+            checked={deleteConfirm}
+            onChange={(e) => setDeleteConfirm(e.target.checked)}
+            disabled={deleteLoading || loading}
+            className="mt-1 w-4 h-4 accent-red-600"
+          />
+          Jag förstår att dansen tas bort från hemsidan om admin godkänner.
+        </label>
+
+        {deleteError && (
+          <p className="text-sm text-red-700 bg-white border border-red-200 rounded-lg px-3 py-2">
+            {deleteError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleDeleteRequest}
+          disabled={deleteLoading || loading}
+          className="w-full border border-red-300 bg-white hover:bg-red-100 disabled:opacity-60 text-red-700 font-medium py-3 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+        >
+          {deleteLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              Skickar borttagningsbegäran…
+            </>
+          ) : (
+            "Begär borttagning"
+          )}
+        </button>
+      </section>
     </div>
   );
 }

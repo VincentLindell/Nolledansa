@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowLeft, CheckCircle, Trash2, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, EyeOff, Trash2, XCircle } from "lucide-react";
 import { isAdmin } from "@/lib/supabase/auth-helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -64,6 +64,8 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
   const hasProposedVideo = !!request.video_url && request.video_url !== dance.video_url;
   const requestType = request.request_type ?? "edit";
   const isDeleteRequest = requestType === "delete";
+  const isHideRequest = requestType === "hide";
+  const isMetadataOnlyRequest = isDeleteRequest || isHideRequest;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -80,7 +82,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Ändringsförslag</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {isDeleteRequest ? "Borttagningsbegäran för" : "För dansen"}{" "}
+              {isDeleteRequest ? "Borttagningsbegäran för" : isHideRequest ? "Gömningsbegäran för" : "För dansen"}{" "}
               {sectionLabel(dance.section, dance.year)} · {dance.title}
             </p>
           </div>
@@ -105,6 +107,23 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
           </div>
         )}
 
+        {isHideRequest && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800 flex items-start gap-3">
+            <EyeOff className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Användaren vill gömma den här dansen.</p>
+              <p className="mt-1">
+                Om du godkänner göms dansen från hemsidan och hamnar under fliken Gömda danser i adminpanelen.
+              </p>
+              <p className="mt-1">
+                Visa igen: {request.hide_indefinitely || !request.hide_until
+                  ? "Tills vidare"
+                  : new Date(request.hide_until).toLocaleDateString("sv-SE")}
+              </p>
+            </div>
+          </div>
+        )}
+
         {request.requester_note && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
             <p className="text-xs text-gray-500 mb-1">Kommentar från användare</p>
@@ -112,7 +131,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
           </div>
         )}
 
-        <div className={`grid grid-cols-1 ${isDeleteRequest ? "" : "md:grid-cols-2"} gap-4`}>
+        <div className={`grid grid-cols-1 ${isMetadataOnlyRequest ? "" : "md:grid-cols-2"} gap-4`}>
           <div className="border border-gray-200 rounded-lg p-4 space-y-2">
             <p className="text-xs text-gray-500">Nuvarande info</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Titel:</span> {dance.title}</p>
@@ -122,7 +141,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
             <p className="text-sm text-gray-800"><span className="font-medium">Låt:</span> {dance.song_title}{dance.artist ? ` · ${dance.artist}` : ""}</p>
           </div>
 
-          {!isDeleteRequest && (
+          {!isMetadataOnlyRequest && (
           <div className="border border-blue-200 rounded-lg p-4 space-y-2 bg-blue-50/40">
             <p className="text-xs text-blue-700">Föreslagen info</p>
             <p className="text-sm text-gray-800"><span className="font-medium">Titel:</span> {request.title}</p>
@@ -160,7 +179,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
         </div>
       </div>
 
-      {!isDeleteRequest && (
+      {!isMetadataOnlyRequest && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-3">Nuvarande dansdelar</h2>
@@ -236,7 +255,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
               className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-3 rounded-xl text-sm transition-colors"
             >
               <CheckCircle className="w-4 h-4" />
-              {isDeleteRequest ? "Godkänn borttagning" : "Godkänn ändring"}
+              {isDeleteRequest ? "Godkänn borttagning" : isHideRequest ? "Godkänn gömning" : "Godkänn ändring"}
             </button>
           </form>
 
@@ -252,7 +271,7 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
               className="w-full flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 rounded-xl text-sm transition-colors"
             >
               <XCircle className="w-4 h-4" />
-              {isDeleteRequest ? "Neka borttagning" : "Neka ändring"}
+              {isDeleteRequest ? "Neka borttagning" : isHideRequest ? "Neka gömning" : "Neka ändring"}
             </button>
           </form>
         </div>

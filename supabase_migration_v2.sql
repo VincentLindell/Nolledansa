@@ -6,7 +6,14 @@
 -- 1. Lägg till status-kolumn på dances
 ALTER TABLE public.dances
   ADD COLUMN IF NOT EXISTS status text DEFAULT 'pending'
-  CHECK (status IN ('pending', 'approved', 'rejected'));
+  CHECK (status IN ('pending', 'approved', 'rejected', 'hidden'));
+
+ALTER TABLE public.dances
+  DROP CONSTRAINT IF EXISTS dances_status_check;
+
+ALTER TABLE public.dances
+  ADD CONSTRAINT dances_status_check
+  CHECK (status IN ('pending', 'approved', 'rejected', 'hidden'));
 
 ALTER TABLE public.dances
   ADD COLUMN IF NOT EXISTS organization text NOT NULL DEFAULT 'Nollningen'
@@ -21,6 +28,15 @@ ALTER TABLE public.dances
 
 ALTER TABLE public.dances
   ADD COLUMN IF NOT EXISTS dancer_names text NOT NULL DEFAULT '';
+
+ALTER TABLE public.dances
+  ADD COLUMN IF NOT EXISTS hidden_until date;
+
+ALTER TABLE public.dances
+  ADD COLUMN IF NOT EXISTS hidden_note text;
+
+ALTER TABLE public.dances
+  ADD COLUMN IF NOT EXISTS hidden_at timestamptz;
 
 -- Sätt befintliga danser till approved (om du kört schema v1)
 UPDATE public.dances SET status = 'approved' WHERE status IS NULL OR status = 'pending';
@@ -137,7 +153,7 @@ CREATE TABLE IF NOT EXISTS public.dance_edit_requests (
   created_at timestamptz NOT NULL DEFAULT now(),
   dance_id uuid NOT NULL REFERENCES public.dances(id) ON DELETE CASCADE,
   request_type text NOT NULL DEFAULT 'edit'
-    CHECK (request_type IN ('edit', 'delete')),
+    CHECK (request_type IN ('edit', 'delete', 'hide')),
   title text NOT NULL,
   section text NOT NULL,
   organization text NOT NULL DEFAULT 'Nollningen'
@@ -150,6 +166,8 @@ CREATE TABLE IF NOT EXISTS public.dance_edit_requests (
   video_url text,
   thumbnail_url text,
   requester_note text,
+  hide_until date,
+  hide_indefinitely boolean NOT NULL DEFAULT false,
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'approved', 'rejected')),
   resolved_at timestamptz
@@ -178,11 +196,17 @@ ALTER TABLE public.dance_edit_requests
   ADD COLUMN IF NOT EXISTS request_type text NOT NULL DEFAULT 'edit';
 
 ALTER TABLE public.dance_edit_requests
+  ADD COLUMN IF NOT EXISTS hide_until date;
+
+ALTER TABLE public.dance_edit_requests
+  ADD COLUMN IF NOT EXISTS hide_indefinitely boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.dance_edit_requests
   DROP CONSTRAINT IF EXISTS dance_edit_requests_request_type_check;
 
 ALTER TABLE public.dance_edit_requests
   ADD CONSTRAINT dance_edit_requests_request_type_check
-  CHECK (request_type IN ('edit', 'delete'));
+  CHECK (request_type IN ('edit', 'delete', 'hide'));
 
 CREATE TABLE IF NOT EXISTS public.dance_edit_request_segments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
