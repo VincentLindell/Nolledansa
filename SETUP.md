@@ -35,7 +35,7 @@ AUTHENTIK_ISSUER=https://auth.example.com/application/o/nolledansa/
 AUTHENTIK_CLIENT_ID=...
 AUTHENTIK_CLIENT_SECRET=...
 
-ADMIN_EMAILS=admin@example.com
+AUTHENTIK_ADMIN_GROUPS=dsek.noll.pepp
 
 S3_ENDPOINT=http://localhost:9000
 S3_REGION=us-east-1
@@ -57,4 +57,5 @@ npm run dev
 
 ## 7. Admin
 Admin-login sker via Authentik på `/admin`.
-En användare får adminåtkomst endast om e-postadressen finns i `ADMIN_EMAILS`.
+En användare får adminåtkomst om den tillhör någon grupp i `AUTHENTIK_ADMIN_GROUPS`.
+Exempel: `dsek.noll.pepp`.

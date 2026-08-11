@@ -33,7 +33,7 @@ export default function AdminLoginForm() {
         </button>
 
         <p className="text-xs text-gray-400 mt-4 text-center">
-          Endast admins i ADMIN_EMAILS får tillgång efter inloggning.
+          Endast användare i Authentik admin-grupp får tillgång efter inloggning.
         </p>
       </div>
     </div>
