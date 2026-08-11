@@ -3,7 +3,8 @@ export const runtime = "nodejs";
 function isAllowedVideoUrl(value: string) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:";
+    if (url.protocol === "https:") return true;
+    return url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
   } catch {
     return false;
   }

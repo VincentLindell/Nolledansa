@@ -1,40 +1,31 @@
-import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { Dance, DanceSegment } from "@/lib/types";
 import { sectionLabel, sectionLabelWithOrganization } from "@/lib/utils";
 import DanceClient from "@/components/DanceClient";
 import { ExternalLink, Music } from "lucide-react";
 import type { Metadata } from "next";
+import { getApprovedDanceById, getDanceMetadata, getDanceSegments } from "@/lib/store";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase.from("dances").select("title, section, year").eq("id", id).single();
+  const data = await getDanceMetadata(id);
   if (!data) return { title: "Dans – NolleDansa" };
   return { title: `${data.title} (${sectionLabel(data.section, data.year)}) – NolleDansa` };
 }
 
 export default async function DancePage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const [danceResult, segmentsResult] = await Promise.all([
-    supabase.from("dances").select("*").eq("id", id).single(),
-    supabase
-      .from("dance_segments")
-      .select("*")
-      .eq("dance_id", id)
-      .order("sort_order", { ascending: true }),
+  const [dance, segments] = await Promise.all([
+    getApprovedDanceById(id),
+    getDanceSegments(id),
   ]);
 
-  if (danceResult.error || !danceResult.data) notFound();
-
-  const dance = danceResult.data as Dance;
-  const segments = (segmentsResult.data ?? []) as DanceSegment[];
+  if (!dance) notFound();
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">

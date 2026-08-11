@@ -1,5 +1,4 @@
-import { isAdmin } from "@/lib/supabase/auth-helpers";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdmin } from "@/lib/auth-helpers";
 import { Dance, DanceEditRequest, SectionChant } from "@/lib/types";
 import { sectionLabel } from "@/lib/utils";
 import Link from "next/link";
@@ -7,6 +6,7 @@ import AdminLoginForm from "@/components/AdminLoginForm";
 import { approveSectionChant, rejectSectionChant, restoreHiddenDance } from "./actions";
 import { ShieldCheck, Clock, Eye, EyeOff, Music, PencilLine, MessageSquareText, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
+import { getAdminOverviewData, getDancesByIds } from "@/lib/store";
 
 export const metadata: Metadata = {
   title: "Admin – NolleDansa",
@@ -26,52 +26,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     return <AdminLoginForm />;
   }
 
-  const supabase = createAdminClient();
   const params = await searchParams;
   const activeTab = params?.tab === "hidden" ? "hidden" : "pending";
 
-  const [
-    { data: pending },
-    { data: pendingEditRequests },
-    { data: pendingSectionChants },
-    { data: hiddenDances },
-  ] = await Promise.all([
-    supabase
-      .from("dances")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("dance_edit_requests")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("section_chants")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("dances")
-      .select("*")
-      .eq("status", "hidden")
-      .order("hidden_at", { ascending: false }),
-  ]);
-
-  const dances = (pending ?? []) as Dance[];
-  const editRequests = (pendingEditRequests ?? []) as DanceEditRequest[];
-  const sectionChants = (pendingSectionChants ?? []) as SectionChant[];
-  const hidden = (hiddenDances ?? []) as Dance[];
+  const { dances, editRequests, sectionChants, hiddenDances: hidden } = await getAdminOverviewData();
 
   const danceIdsForRequests = [...new Set(editRequests.map((r) => r.dance_id))];
-  const { data: requestDances } = danceIdsForRequests.length
-    ? await supabase
-        .from("dances")
-        .select("id, title, section, year")
-        .in("id", danceIdsForRequests)
-    : { data: [] };
+  const requestDances = await getDancesByIds(danceIdsForRequests);
 
-  const requestDanceMap = new Map((requestDances ?? []).map((dance) => [dance.id, dance]));
+  const requestDanceMap = new Map(requestDances.map((dance) => [dance.id, dance]));
   const hasPendingItems = dances.length > 0 || editRequests.length > 0 || sectionChants.length > 0;
 
   return (

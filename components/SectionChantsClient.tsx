@@ -2,7 +2,6 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { CheckCircle, ChevronDown, Loader2, Plus } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Section, SectionChant } from "@/lib/types";
 import { getSectionTheme } from "@/lib/utils";
 
@@ -42,7 +41,6 @@ interface SectionChantsClientProps {
 }
 
 export default function SectionChantsClient({ initialChants }: SectionChantsClientProps) {
-  const supabase = createClient();
   const [section, setSection] = useState<Section>("D");
   const [name, setName] = useState("");
   const [melody, setMelody] = useState("");
@@ -87,20 +85,22 @@ export default function SectionChantsClient({ initialChants }: SectionChantsClie
 
     setLoading(true);
 
-    const { error: insertError } = await supabase
-      .from("section_chants")
-      .insert({
+    const response = await fetch("/api/section-chants", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         section,
         name: trimmedName,
         melody: trimmedMelody,
         lyrics: trimmedLyrics,
-        status: "pending",
-      });
+      }),
+    });
 
+    const payload = (await response.json()) as { error?: string };
     setLoading(false);
 
-    if (insertError) {
-      setError(insertError.message);
+    if (!response.ok) {
+      setError(payload.error ?? "Kunde inte skicka ramsan.");
       return;
     }
 

@@ -16,49 +16,45 @@ function requireEnv(name: string) {
   return value;
 }
 
-export function getR2ErrorMessage(error: unknown) {
+export function getStorageErrorMessage(error: unknown) {
   if (!(error instanceof Error)) {
-    return "R2-uppladdningen misslyckades.";
+    return "Uppladdningen misslyckades.";
   }
 
   const code = "Code" in error && typeof error.Code === "string" ? error.Code : undefined;
   const name = error.name;
 
   if (name === "SignatureDoesNotMatch" || code === "SignatureDoesNotMatch") {
-    return (
-      "R2 kunde inte verifiera signaturen. Kontrollera att CLOUDFLARE_R2_ACCOUNT_ID, " +
-      "CLOUDFLARE_R2_ACCESS_KEY_ID och CLOUDFLARE_R2_SECRET_ACCESS_KEY kommer från samma " +
-      "Cloudflare R2 Access Key, och att token har Object Read & Write för rätt bucket."
-    );
+    return "Felaktig signatur mot objektlagring. Kontrollera S3 credentials och endpoint.";
   }
 
   if (name === "InvalidAccessKeyId" || code === "InvalidAccessKeyId") {
-    return "R2 access key är ogiltig. Kontrollera CLOUDFLARE_R2_ACCESS_KEY_ID.";
+    return "Felaktig access key för objektlagring.";
   }
 
   if (name === "NoSuchBucket" || code === "NoSuchBucket") {
-    return "R2-bucketen hittades inte. Kontrollera CLOUDFLARE_R2_BUCKET_NAME.";
+    return "Bucket hittades inte. Kontrollera S3_BUCKET_NAME.";
   }
 
-  return error.message || "R2-uppladdningen misslyckades.";
+  return error.message || "Uppladdningen misslyckades.";
 }
 
-function getR2BucketName() {
-  return requireEnv("CLOUDFLARE_R2_BUCKET_NAME");
+function getBucketName() {
+  return requireEnv("S3_BUCKET_NAME");
 }
 
-function getR2Client() {
-  const accountId = requireEnv("CLOUDFLARE_R2_ACCOUNT_ID");
-  const endpoint =
-    process.env.CLOUDFLARE_R2_ENDPOINT?.trim() ||
-    `https://${accountId}.r2.cloudflarestorage.com`;
+function getS3Client() {
+  const endpoint = requireEnv("S3_ENDPOINT");
+  const region = process.env.S3_REGION?.trim() || "us-east-1";
+  const forcePathStyle = (process.env.S3_FORCE_PATH_STYLE?.trim() ?? "true") === "true";
 
   return new S3Client({
-    region: "auto",
+    region,
     endpoint,
+    forcePathStyle,
     credentials: {
-      accessKeyId: requireEnv("CLOUDFLARE_R2_ACCESS_KEY_ID"),
-      secretAccessKey: requireEnv("CLOUDFLARE_R2_SECRET_ACCESS_KEY"),
+      accessKeyId: requireEnv("S3_ACCESS_KEY_ID"),
+      secretAccessKey: requireEnv("S3_SECRET_ACCESS_KEY"),
     },
   });
 }
@@ -68,7 +64,7 @@ function cleanExtension(filename: string, fallback: string) {
   return ext || fallback;
 }
 
-export function createR2ObjectKey(params: {
+export function createObjectKey(params: {
   kind: UploadKind;
   filename: string;
   ownerId?: string | null;
@@ -87,23 +83,23 @@ export function createR2ObjectKey(params: {
   return `${params.kind}s/${owner}/${date}/${Date.now()}-${id}.${ext}`;
 }
 
-export function getR2ObjectUrl(key: string) {
-  const publicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL?.replace(/\/+$/, "");
+export function getObjectUrl(key: string) {
+  const publicUrl = process.env.S3_PUBLIC_URL?.replace(/\/+$/, "");
   if (publicUrl) {
     return `${publicUrl}/${key.split("/").map(encodeURIComponent).join("/")}`;
   }
 
-  return `/api/r2/object?key=${encodeURIComponent(key)}`;
+  return `/api/object?key=${encodeURIComponent(key)}`;
 }
 
-export async function uploadR2Object(params: {
+export async function uploadObject(params: {
   key: string;
   body: Buffer;
   contentType: string;
 }) {
-  await getR2Client().send(
+  await getS3Client().send(
     new PutObjectCommand({
-      Bucket: getR2BucketName(),
+      Bucket: getBucketName(),
       Key: params.key,
       Body: params.body,
       ContentType: params.contentType,
@@ -113,17 +109,17 @@ export async function uploadR2Object(params: {
 
   return {
     key: params.key,
-    url: getR2ObjectUrl(params.key),
+    url: getObjectUrl(params.key),
   };
 }
 
-export async function getR2Object(params: {
+export async function getObject(params: {
   key: string;
   range?: string | null;
 }) {
-  return getR2Client().send(
+  return getS3Client().send(
     new GetObjectCommand({
-      Bucket: getR2BucketName(),
+      Bucket: getBucketName(),
       Key: params.key,
       Range: params.range ?? undefined,
     })

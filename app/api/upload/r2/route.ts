@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createR2ObjectKey, getR2ErrorMessage, uploadR2Object } from "@/lib/r2";
+import { auth } from "@/auth";
+import { createObjectKey, getStorageErrorMessage, uploadObject } from "@/lib/object-storage";
 
 export const runtime = "nodejs";
 
@@ -49,20 +49,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const session = await auth();
+    const userId = session?.user?.email ?? null;
 
-    const key = createR2ObjectKey({
+    const key = createObjectKey({
       kind,
       filename: file.name,
-      ownerId: user?.id,
+      ownerId: userId,
       danceId: formData.get("danceId")?.toString() ?? null,
       requestId: formData.get("requestId")?.toString() ?? null,
     });
 
-    const result = await uploadR2Object({
+    const result = await uploadObject({
       key,
       body: Buffer.from(await file.arrayBuffer()),
       contentType: file.type || "application/octet-stream",
@@ -70,7 +68,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[R2 upload] failed:", error);
-    return NextResponse.json({ error: getR2ErrorMessage(error) }, { status: 500 });
+    console.error("[Object upload] failed:", error);
+    return NextResponse.json({ error: getStorageErrorMessage(error) }, { status: 500 });
   }
 }
