@@ -16,6 +16,7 @@ function getProfileGroups(profile: Record<string, unknown>): string[] {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     {
       id: "authentik",

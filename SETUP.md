@@ -31,6 +31,8 @@ Skapa en bucket (t.ex. `dance-videos`) och ett access key-par med read/write.
 DATABASE_URL=postgres://user:password@localhost:5432/nolledansa
 
 AUTH_SECRET=replace-with-a-random-secret
+AUTH_URL=https://nolledansa.dsek.se
+AUTH_TRUST_HOST=true
 AUTHENTIK_ISSUER=https://auth.example.com/application/o/nolledansa/
 AUTHENTIK_CLIENT_ID=...
 AUTHENTIK_CLIENT_SECRET=...
