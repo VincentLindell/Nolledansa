@@ -7,7 +7,7 @@ export default function AuthButton() {
     <button
       type="button"
       onClick={() => {
-        window.location.href = "/api/auth/signin/authentik?callbackUrl=/admin";
+        window.location.href = "/api/auth/signin?provider=authentik&callbackUrl=%2Fadmin";
       }}
       className="flex items-center gap-1 text-sm text-gray-600 hover:text-purple-600 transition-colors"
     >

@@ -8,7 +8,7 @@ export default function AdminLoginForm() {
 
   const handleLogin = () => {
     setLoading(true);
-    window.location.href = "/api/auth/signin/authentik?callbackUrl=/admin";
+    window.location.href = "/api/auth/signin?provider=authentik&callbackUrl=%2Fadmin";
   };
 
   return (
