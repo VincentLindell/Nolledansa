@@ -33,7 +33,7 @@ export default function AdminLoginForm() {
         </button>
 
         <p className="text-xs text-gray-400 mt-4 text-center">
-          Endast användare i Authentik admin-grupp får tillgång efter inloggning.
+          Inloggning och behörighet styrs av Authentik-policys.
         </p>
       </div>
     </div>

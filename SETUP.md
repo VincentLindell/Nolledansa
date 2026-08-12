@@ -37,8 +37,6 @@ AUTHENTIK_ISSUER=https://auth.example.com/application/o/nolledansa/
 AUTHENTIK_CLIENT_ID=...
 AUTHENTIK_CLIENT_SECRET=...
 
-AUTHENTIK_ADMIN_GROUPS=dsek.noll.pepp
-
 S3_ENDPOINT=http://localhost:9000
 S3_REGION=us-east-1
 S3_BUCKET_NAME=dance-videos
@@ -59,8 +57,4 @@ npm run dev
 
 ## 7. Admin
 Admin-login sker via Authentik på `/admin`.
-En användare får adminåtkomst om den tillhör någon grupp i `AUTHENTIK_ADMIN_GROUPS`.
-Exempel: `dsek.noll.pepp`.
-
-För att gruppkontrollen ska fungera måste Authentik faktiskt skicka gruppclaim i OIDC-token eller userinfo
-(t.ex. `groups` eller `ak_groups`).
+Behörighet styrs helt via Authentik-policy för applikationen.
