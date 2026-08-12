@@ -1,19 +1,5 @@
 import NextAuth from "next-auth";
-
-function getStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-}
-
-function getProfileGroups(profile: Record<string, unknown>): string[] {
-  const directGroups = getStringArray(profile.groups);
-  if (directGroups.length > 0) return directGroups;
-
-  const nestedGroups = getStringArray(profile["cognito:groups"]);
-  if (nestedGroups.length > 0) return nestedGroups;
-
-  return [];
-}
+import { getGroupsFromClaims, getGroupsFromJwtString } from "@/lib/auth-group-extractor";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -27,7 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.AUTHENTIK_CLIENT_SECRET ?? "missing-client-secret",
       profile(profile) {
         const raw = profile as Record<string, unknown>;
-        const groups = getProfileGroups(raw);
+        const groups = getGroupsFromClaims(raw);
         return {
           id: String(raw.sub ?? raw.email ?? "unknown-user"),
           name: typeof raw.name === "string" ? raw.name : null,
@@ -42,14 +28,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.groups = getStringArray(user.groups);
+    async jwt({ token, user, profile, account }) {
+      const fromUser = user?.groups ?? [];
+      const fromProfile = getGroupsFromClaims(profile);
+      const fromIdToken = getGroupsFromJwtString(account?.id_token);
+      const fromAccessToken = getGroupsFromJwtString(account?.access_token);
+
+      const merged = Array.from(
+        new Set([
+          ...fromUser,
+          ...fromProfile,
+          ...fromIdToken,
+          ...fromAccessToken,
+          ...(Array.isArray(token.groups) ? token.groups : []),
+        ])
+      );
+
+      if (merged.length > 0) {
+        token.groups = merged;
       }
       return token;
     },
     async session({ session, token }) {
-      session.user.groups = getStringArray(token.groups);
+      session.user.groups = Array.isArray(token.groups)
+        ? token.groups.filter((group): group is string => typeof group === "string")
+        : [];
       return session;
     },
   },

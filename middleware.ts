@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { isAdminGroupMember } from "@/lib/admin-groups";
+import { extractGroupsFromAuthState, isAdminGroupMember } from "@/lib/admin-groups";
 
 export default auth((request) => {
-  const isAllowedAdmin = isAdminGroupMember(request.auth?.user?.groups);
+  const groups = extractGroupsFromAuthState(request.auth);
+  const isAllowedAdmin = isAdminGroupMember(groups);
 
   if (!isAllowedAdmin && request.nextUrl.pathname !== "/admin") {
     const redirectUrl = request.nextUrl.clone();

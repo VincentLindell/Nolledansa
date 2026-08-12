@@ -61,3 +61,6 @@ npm run dev
 Admin-login sker via Authentik på `/admin`.
 En användare får adminåtkomst om den tillhör någon grupp i `AUTHENTIK_ADMIN_GROUPS`.
 Exempel: `dsek.noll.pepp`.
+
+För att gruppkontrollen ska fungera måste Authentik faktiskt skicka gruppclaim i OIDC-token eller userinfo
+(t.ex. `groups` eller `ak_groups`).
