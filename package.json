@@ -6,22 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "psql \"$DATABASE_URL\" -f db/schema.sql"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1079.0",
     "@ffmpeg/ffmpeg": "^0.12.10",
     "@ffmpeg/util": "^0.12.1",
-    "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.108.2",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
+    "next-auth": "^5.0.0-beta.26",
+    "pg": "^8.16.3",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -1,23 +1,15 @@
 import type { Metadata } from "next";
 import SectionChantsClient from "@/components/SectionChantsClient";
-import { createClient } from "@/lib/supabase/server";
 import { SectionChant } from "@/lib/types";
+import { getApprovedSectionChants } from "@/lib/store";
 
 export const metadata: Metadata = {
   title: "Sektionsramsor - NolleDansa",
 };
+export const dynamic = "force-dynamic";
 
 async function getSectionChants(): Promise<SectionChant[]> {
-  const supabase = await createClient();
-
-  const { data } = await supabase
-    .from("section_chants")
-    .select("*")
-    .eq("status", "approved")
-    .order("section", { ascending: true })
-    .order("name", { ascending: true });
-
-  return (data ?? []) as SectionChant[];
+  return getApprovedSectionChants();
 }
 
 export default async function SectionChantsPage() {

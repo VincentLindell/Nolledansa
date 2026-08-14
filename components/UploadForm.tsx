@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Upload, Loader2, CheckCircle } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { DanceFormData, DanceOrganization, SegmentFormData, Section } from "@/lib/types";
 import { parseTime } from "@/lib/utils";
 import { compressVideo, CompressionProgress } from "@/lib/compress-video";
@@ -19,7 +18,7 @@ const isDancesRlsInsertError = (message?: string) =>
   message.toLowerCase().includes("row-level security policy") &&
   message.toLowerCase().includes("table \"dances\"");
 
-async function uploadFileToR2(params: {
+async function uploadFileToObjectStorage(params: {
   file: File | Blob;
   kind: "video" | "thumbnail";
   filename: string;
@@ -28,7 +27,7 @@ async function uploadFileToR2(params: {
   formData.append("kind", params.kind);
   formData.append("file", params.file, params.filename);
 
-  const response = await fetch("/api/upload/r2", {
+  const response = await fetch("/api/upload/object", {
     method: "POST",
     body: formData,
   });
@@ -36,21 +35,11 @@ async function uploadFileToR2(params: {
   const data = (await response.json()) as { key?: string; url?: string; error?: string };
 
   if (!response.ok || !data.url) {
-    throw new Error(data.error ?? "R2-uppladdningen misslyckades.");
+    throw new Error(data.error ?? "Uppladdningen misslyckades.");
   }
 
   return { key: data.key, url: data.url };
 }
-
-const getSupabaseHost = () => {
-  try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!url) return "okänd-host";
-    return new URL(url).host;
-  } catch {
-    return "okänd-host";
-  }
-};
 
 const defaultForm: DanceFormData = {
   title: "",
@@ -64,7 +53,6 @@ const defaultForm: DanceFormData = {
 };
 
 export default function UploadForm() {
-  const supabase = createClient();
   const videoInputRef = useRef<HTMLInputElement>(null);
   const captureVideoRef = useRef<HTMLVideoElement>(null);
   const frameCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -228,13 +216,12 @@ export default function UploadForm() {
         );
       }
 
-      // ── 2. Ladda upp video till Cloudflare R2 ────────────────────────────
+      // ── 2. Ladda upp video till objektlagring ─────────────────────────────
       setStatusMsg("Laddar upp video…");
       setCompressionPct(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
       const uploadExt = fileToUpload.name.split(".").pop()?.toLowerCase() || "mp4";
-      const videoUpload = await uploadFileToR2({
+      const videoUpload = await uploadFileToObjectStorage({
         file: fileToUpload,
         kind: "video",
         filename: `dance-video.${uploadExt}`,
@@ -243,7 +230,7 @@ export default function UploadForm() {
       // ── 3.5 Ladda upp thumbnail (valfritt) ──────────────────────────────
       let thumbnailUrl: string | null = null;
       if (thumbnailBlob) {
-        const thumbnailUpload = await uploadFileToR2({
+        const thumbnailUpload = await uploadFileToObjectStorage({
           file: thumbnailBlob,
           kind: "thumbnail",
           filename: "dance-thumbnail.jpg",
@@ -256,51 +243,37 @@ export default function UploadForm() {
 
       const danceId = crypto.randomUUID();
 
-      const { error: danceError } = await supabase
-        .from("dances")
-        .insert({
-          id: danceId,
+      const response = await fetch("/api/dances/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          danceId,
           title: form.title.trim(),
           section: form.section,
           organization: form.organization,
           year: form.year.trim(),
-          song_title: form.title.trim(),
-          dancer_names: form.dancer_names.trim(),
+          songTitle: form.title.trim(),
+          dancerNames: form.dancer_names.trim(),
           artist: form.artist.trim() || null,
-          spotify_url: form.spotify_url.trim() || null,
-          video_url: videoUpload.url,
-          thumbnail_url: thumbnailUrl,
-          created_by: user?.id ?? null,
-          status: "pending",
-        });
+          spotifyUrl: form.spotify_url.trim() || null,
+          videoUrl: videoUpload.url,
+          thumbnailUrl,
+          segments: segments.map((s, i) => ({
+            name: s.name.trim(),
+            description: s.description.trim() || null,
+            startTime: parseTime(s.start_time_str),
+            endTime: parseTime(s.end_time_str),
+            sortOrder: i,
+          })),
+        }),
+      });
 
-      if (danceError) {
-        if (isDancesRlsInsertError(danceError.message)) {
-          throw new Error(
-            "Supabase blockerar uppladdningen via RLS för tabellen dances. " +
-            `Verifiera att du körde SQL i samma projekt (${getSupabaseHost()}) och att rätt policy finns.`
-          );
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        if (isDancesRlsInsertError(payload.error)) {
+          throw new Error("Uppladdningen blockerades av servern.");
         }
-        throw new Error(danceError.message);
-      }
-
-      // ── 5. Spara dansdelar ───────────────────────────────────────────────
-      if (segments.length > 0) {
-        setStatusMsg("Sparar dansdelar…");
-        const segmentRows = segments.map((s, i) => ({
-          dance_id: danceId,
-          name: s.name.trim(),
-          description: s.description.trim() || null,
-          start_time: parseTime(s.start_time_str),
-          end_time: parseTime(s.end_time_str),
-          sort_order: i,
-        }));
-
-        const { error: segError } = await supabase
-          .from("dance_segments")
-          .insert(segmentRows);
-
-        if (segError) throw new Error(segError.message);
+        throw new Error(payload.error ?? "Kunde inte spara dansen.");
       }
 
       setStatusMsg(null);

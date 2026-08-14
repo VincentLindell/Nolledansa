@@ -1,7 +1,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import { Dance, TrendingDance } from "@/lib/types";
+import {
+  getCurrentYearDances as getCurrentYearDancesFromStore,
+  getRandomApprovedDances,
+  getTrendingDances as getTrendingDancesFromStore,
+  searchApprovedDances,
+} from "@/lib/store";
 import SearchBar from "@/components/SearchBar";
 import TrendingSection from "@/components/TrendingSection";
 import DanceCard from "@/components/DanceCard";
@@ -13,100 +18,20 @@ interface HomeProps {
 
 export const dynamic = "force-dynamic";
 
-function shuffleDances(dances: Dance[]) {
-  const shuffled = [...dances];
-
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-
-  return shuffled;
-}
-
 async function getTrendingDances(): Promise<TrendingDance[]> {
-  const supabase = await createClient();
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  // Get click counts per dance for the last 7 days
-  const { data: clicks } = await supabase
-    .from("dance_clicks")
-    .select("dance_id")
-    .gte("created_at", since);
-
-  if (!clicks || clicks.length === 0) return [];
-
-  // Count per dance
-  const counts: Record<string, number> = {};
-  for (const c of clicks) {
-    counts[c.dance_id] = (counts[c.dance_id] ?? 0) + 1;
-  }
-
-  // Get top 5 dance IDs
-  const topIds = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([id]) => id);
-
-  if (topIds.length === 0) return [];
-
-  const { data: dances } = await supabase
-    .from("dances")
-    .select("*")
-    .eq("status", "approved")
-    .in("id", topIds);
-
-  if (!dances) return [];
-
-  const sorted = [...dances]
-    .map((d) => ({ ...d, view_count: counts[d.id] ?? 0 }))
-    .sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0));
-
-  return sorted as TrendingDance[];
+  return getTrendingDancesFromStore();
 }
 
 async function searchDances(query: string): Promise<Dance[]> {
-  const supabase = await createClient();
-  const q = `%${query}%`;
-
-  const { data } = await supabase
-    .from("dances")
-    .select("*")
-    .eq("status", "approved")
-    .or(
-      `title.ilike.${q},section.ilike.${q},year.ilike.${q},song_title.ilike.${q},dancer_names.ilike.${q},artist.ilike.${q}`
-    )
-    .order("created_at", { ascending: false })
-    .limit(30);
-
-  return (data ?? []) as Dance[];
+  return searchApprovedDances(query);
 }
 
 async function getRandomDances(): Promise<Dance[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("dances")
-    .select("*")
-    .eq("status", "approved");
-
-  return shuffleDances((data ?? []) as Dance[]).slice(0, 12);
+  return getRandomApprovedDances(12);
 }
 
 async function getCurrentYearDances(): Promise<Dance[]> {
-  const supabase = await createClient();
-  const now = new Date();
-  const fullYear = String(now.getFullYear());
-  const shortYear = fullYear.slice(-2);
-
-  const { data } = await supabase
-    .from("dances")
-    .select("*")
-    .eq("status", "approved")
-    .in("year", [shortYear, fullYear])
-    .order("created_at", { ascending: false })
-    .limit(12);
-
-  return (data ?? []) as Dance[];
+  return getCurrentYearDancesFromStore(12);
 }
 
 export default async function HomePage({ searchParams }: HomeProps) {

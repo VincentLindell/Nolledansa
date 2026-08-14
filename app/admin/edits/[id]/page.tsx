@@ -2,8 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft, CheckCircle, EyeOff, Trash2, XCircle } from "lucide-react";
-import { isAdmin } from "@/lib/supabase/auth-helpers";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdmin } from "@/lib/auth-helpers";
 import {
   Dance,
   DanceEditRequest,
@@ -12,6 +11,7 @@ import {
 } from "@/lib/types";
 import { formatTime, sectionLabel } from "@/lib/utils";
 import { approveEditRequest, rejectEditRequest } from "../../actions";
+import { getDanceById, getDanceSegments, getEditRequestById } from "@/lib/store";
 
 export const metadata: Metadata = { title: "Granska ändringsförslag – NolleDansa" };
 export const dynamic = "force-dynamic";
@@ -29,35 +29,17 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
   if (!admin) redirect("/admin");
 
   const { id } = await params;
-  const supabase = createAdminClient();
+  const requestData = await getEditRequestById(id);
+  if (!requestData) notFound();
+  const request = requestData.request;
+  const proposedSegments = requestData.segments;
 
-  const [requestResult, requestSegmentsResult] = await Promise.all([
-    supabase.from("dance_edit_requests").select("*").eq("id", id).single(),
-    supabase
-      .from("dance_edit_request_segments")
-      .select("*")
-      .eq("request_id", id)
-      .order("sort_order", { ascending: true }),
+  const [dance, currentSegments] = await Promise.all([
+    getDanceById(request.dance_id),
+    getDanceSegments(request.dance_id),
   ]);
 
-  if (requestResult.error || !requestResult.data) notFound();
-
-  const request = requestResult.data as DanceEditRequest;
-  const proposedSegments = (requestSegmentsResult.data ?? []) as DanceEditRequestSegment[];
-
-  const [danceResult, currentSegmentsResult] = await Promise.all([
-    supabase.from("dances").select("*").eq("id", request.dance_id).single(),
-    supabase
-      .from("dance_segments")
-      .select("*")
-      .eq("dance_id", request.dance_id)
-      .order("sort_order", { ascending: true }),
-  ]);
-
-  if (danceResult.error || !danceResult.data) notFound();
-
-  const dance = danceResult.data as Dance;
-  const currentSegments = (currentSegmentsResult.data ?? []) as DanceSegment[];
+  if (!dance) notFound();
 
   const currentKeys = new Set(currentSegments.map(segmentKey));
   const proposedKeys = new Set(proposedSegments.map(segmentKey));
@@ -279,4 +261,3 @@ export default async function AdminEditRequestPage({ params }: PageProps) {
     </div>
   );
 }
-

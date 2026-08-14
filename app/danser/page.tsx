@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpDown, Filter, Music2, X } from "lucide-react";
 import DanceCard from "@/components/DanceCard";
-import { createClient } from "@/lib/supabase/server";
 import { Dance, DanceOrganization, Section } from "@/lib/types";
+import { getApprovedDancesByFilters, getAvailableApprovedYears } from "@/lib/store";
 
 export const metadata: Metadata = {
   title: "Danser - NolleDansa",
 };
+export const dynamic = "force-dynamic";
 
 const SECTIONS: Section[] = ["A", "D", "E", "F", "I", "ING", "K", "M", "V", "W"];
 const ORGANIZATIONS: DanceOrganization[] = [
@@ -55,54 +56,11 @@ async function getDances(filters: {
   organizations: DanceOrganization[];
   sort: DanceSort;
 }): Promise<Dance[]> {
-  const supabase = await createClient();
-  let query = supabase
-    .from("dances")
-    .select("*")
-    .eq("status", "approved");
-
-  if (filters.sort === "section") {
-    query = query
-      .order("section", { ascending: true })
-      .order("year", { ascending: false })
-      .order("created_at", { ascending: false });
-  } else if (filters.sort === "oldest") {
-    query = query
-      .order("year", { ascending: true })
-      .order("section", { ascending: true })
-      .order("created_at", { ascending: false });
-  } else {
-    query = query
-      .order("year", { ascending: false })
-      .order("section", { ascending: true })
-      .order("created_at", { ascending: false });
-  }
-
-  if (filters.sections.length > 0) {
-    query = query.in("section", filters.sections);
-  }
-
-  if (filters.years.length > 0) {
-    query = query.in("year", filters.years);
-  }
-
-  if (filters.organizations.length > 0) {
-    query = query.in("organization", filters.organizations);
-  }
-
-  const { data } = await query;
-  return (data ?? []) as Dance[];
+  return getApprovedDancesByFilters(filters);
 }
 
 async function getAvailableYears(): Promise<string[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("dances")
-    .select("year")
-    .eq("status", "approved")
-    .order("year", { ascending: false });
-
-  return [...new Set((data ?? []).map((dance) => dance.year).filter(Boolean))];
+  return getAvailableApprovedYears();
 }
 
 export default async function DancesPage({ searchParams }: DancesPageProps) {

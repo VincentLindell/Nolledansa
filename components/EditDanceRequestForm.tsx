@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, EyeOff, Loader2, PencilLine, Trash2, Upload } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import SegmentForm from "@/components/SegmentForm";
 import {
   Dance,
@@ -19,7 +18,7 @@ const ORGANIZATIONS: DanceOrganization[] = ["Nollningen", "Sexmästeriet", "Phus
 const MAX_UPLOAD_MB = 50;
 const LIGHT_COMPRESSION_THRESHOLD_MB = 0;
 
-async function uploadFileToR2(params: {
+async function uploadFileToObjectStorage(params: {
   file: File | Blob;
   kind: "video" | "thumbnail";
   filename: string;
@@ -32,7 +31,7 @@ async function uploadFileToR2(params: {
   if (params.danceId) formData.append("danceId", params.danceId);
   if (params.requestId) formData.append("requestId", params.requestId);
 
-  const response = await fetch("/api/upload/r2", {
+  const response = await fetch("/api/upload/object", {
     method: "POST",
     body: formData,
   });
@@ -40,7 +39,7 @@ async function uploadFileToR2(params: {
   const data = (await response.json()) as { key?: string; url?: string; error?: string };
 
   if (!response.ok || !data.url) {
-    throw new Error(data.error ?? "R2-uppladdningen misslyckades.");
+    throw new Error(data.error ?? "Uppladdningen misslyckades.");
   }
 
   return { key: data.key, url: data.url };
@@ -74,7 +73,6 @@ interface EditDanceRequestFormProps {
 }
 
 export default function EditDanceRequestForm({ dance, segments }: EditDanceRequestFormProps) {
-  const supabase = createClient();
   const videoInputRef = useRef<HTMLInputElement>(null);
   const captureVideoRef = useRef<HTMLVideoElement>(null);
   const frameCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -351,7 +349,7 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
         setStatusMsg("Laddar upp video…");
         setCompressionPct(null);
         const uploadExt = fileToUpload.name.split(".").pop()?.toLowerCase() || "mp4";
-        const videoUpload = await uploadFileToR2({
+        const videoUpload = await uploadFileToObjectStorage({
           file: fileToUpload,
           kind: "video",
           filename: `dance-edit-video.${uploadExt}`,
@@ -363,7 +361,7 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
 
       if (thumbnailBlob) {
         setStatusMsg("Laddar upp thumbnail…");
-        const thumbnailUpload = await uploadFileToR2({
+        const thumbnailUpload = await uploadFileToObjectStorage({
           file: thumbnailBlob,
           kind: "thumbnail",
           filename: "dance-edit-thumbnail.jpg",
@@ -373,91 +371,44 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
         requestThumbnailUrl = thumbnailUpload.url;
       }
 
-      const { error: requestError } = await supabase
-        .from("dance_edit_requests")
-        .insert({
-          id: requestId,
-          dance_id: dance.id,
+      const response = await fetch("/api/dance-edit-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId,
+          danceId: dance.id,
+          requestType: "edit",
           title: form.title.trim(),
           section: form.section,
           organization: form.organization,
           year: form.year.trim(),
-          song_title: form.title.trim(),
-          dancer_names: form.dancer_names.trim(),
+          songTitle: form.title.trim(),
+          dancerNames: form.dancer_names.trim(),
           artist: form.artist.trim() || null,
-          spotify_url: form.spotify_url.trim() || null,
-          video_url: requestVideoUrl,
-          thumbnail_url: requestThumbnailUrl,
-          requester_note: requesterNote.trim() || null,
-          request_type: "edit",
-          status: "pending",
-        });
+          spotifyUrl: form.spotify_url.trim() || null,
+          videoUrl: requestVideoUrl,
+          thumbnailUrl: requestThumbnailUrl,
+          requesterNote: requesterNote.trim() || null,
+          segments: proposedSegments.map((segment, index) => ({
+            name: segment.name.trim(),
+            description: segment.description.trim() || null,
+            startTime: parseTime(segment.start_time_str),
+            endTime: parseTime(segment.end_time_str),
+            sortOrder: index,
+          })),
+        }),
+      });
 
-      if (requestError) {
-        throw new Error(requestError.message);
-      }
-
-      const rows = proposedSegments.map((segment, index) => ({
-        request_id: requestId,
-        name: segment.name.trim(),
-        description: segment.description.trim() || null,
-        start_time: parseTime(segment.start_time_str),
-        end_time: parseTime(segment.end_time_str),
-        sort_order: index,
-      }));
-
-      if (rows.length > 0) {
-        const { error: segmentsError } = await supabase
-          .from("dance_edit_request_segments")
-          .insert(rows);
-
-        if (segmentsError) {
-          throw new Error(segmentsError.message);
-        }
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Kunde inte skicka förslaget.");
       }
 
       setSuccess(true);
       setOpen(false);
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : "";
-      if (
-        message.toLowerCase().includes("schema cache") &&
-        message.includes("organization") &&
-        message.includes("dance_edit_requests")
-      ) {
-        setError(
-          "Databasen saknar kolumnen organization på dance_edit_requests. Kör senaste SQL-migrationen i Supabase SQL Editor och vänta någon minut på att schema-cachen uppdateras."
-        );
-      } else if (
-        message.toLowerCase().includes("schema cache") &&
-        message.includes("request_type") &&
-        message.includes("dance_edit_requests")
-      ) {
-        setError(
-          "Databasen saknar kolumnen request_type på dance_edit_requests. Kör senaste SQL-migrationen i Supabase SQL Editor och vänta någon minut på att schema-cachen uppdateras."
-        );
-      } else if (
-        message.toLowerCase().includes("schema cache") &&
-        message.includes("video_url") &&
-        message.includes("dance_edit_requests")
-      ) {
-        setError(
-          "Databasen saknar kolumnen video_url på dance_edit_requests. Kör senaste SQL-migrationen i Supabase SQL Editor och vänta någon minut på att schema-cachen uppdateras."
-        );
-      } else if (
-        message.toLowerCase().includes("relation") &&
-        (message.includes("dance_edit_requests") || message.includes("dance_edit_request_segments"))
-      ) {
-        setError(
-          "Databasen saknar tabeller för ändringsförslag. Kör senaste SQL-migration i Supabase SQL Editor och försök igen."
-        );
-      } else if (message.toLowerCase().includes("row-level security policy")) {
-        setError(
-          "Supabase blockerade ändringsförslaget via RLS. Kör senaste SQL-migration i Supabase och försök igen."
-        );
-      } else {
-        setError(message || "Kunde inte skicka förslaget.");
-      }
+      setError(message || "Kunde inte skicka förslaget.");
     } finally {
       setLoading(false);
       setStatusMsg(null);
@@ -478,49 +429,38 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
     setDeleteLoading(true);
 
     try {
-      const { error: requestError } = await supabase
-        .from("dance_edit_requests")
-        .insert({
-          id: crypto.randomUUID(),
-          dance_id: dance.id,
-          request_type: "delete",
+      const response = await fetch("/api/dance-edit-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          danceId: dance.id,
+          requestType: "delete",
           title: dance.title,
           section: dance.section,
           organization: dance.organization ?? "Nollningen",
           year: dance.year,
-          song_title: dance.song_title,
-          dancer_names: dance.dancer_names ?? "",
+          songTitle: dance.song_title,
+          dancerNames: dance.dancer_names ?? "",
           artist: dance.artist,
-          spotify_url: dance.spotify_url,
-          video_url: dance.video_url,
-          thumbnail_url: dance.thumbnail_url,
-          requester_note: requesterNote.trim() || "Användaren vill ta bort dansen.",
-          status: "pending",
-        });
+          spotifyUrl: dance.spotify_url,
+          videoUrl: dance.video_url,
+          thumbnailUrl: dance.thumbnail_url,
+          requesterNote: requesterNote.trim() || "Användaren vill ta bort dansen.",
+          segments: [],
+        }),
+      });
 
-      if (requestError) {
-        throw new Error(requestError.message);
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Kunde inte skicka borttagningsbegäran.");
       }
 
       setDeleteSuccess(true);
       setOpen(false);
     } catch (deleteRequestError) {
       const message = deleteRequestError instanceof Error ? deleteRequestError.message : "";
-      if (
-        message.toLowerCase().includes("schema cache") &&
-        message.includes("request_type") &&
-        message.includes("dance_edit_requests")
-      ) {
-        setDeleteError(
-          "Databasen saknar kolumnen request_type på dance_edit_requests. Kör senaste SQL-migrationen i Supabase och försök igen."
-        );
-      } else if (message.toLowerCase().includes("row-level security policy")) {
-        setDeleteError(
-          "Supabase blockerade borttagningsbegäran via RLS. Kör senaste SQL-migration i Supabase och försök igen."
-        );
-      } else {
-        setDeleteError(message || "Kunde inte skicka borttagningsbegäran.");
-      }
+      setDeleteError(message || "Kunde inte skicka borttagningsbegäran.");
     } finally {
       setDeleteLoading(false);
     }
@@ -544,30 +484,33 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
     setHideLoading(true);
 
     try {
-      const { error: requestError } = await supabase
-        .from("dance_edit_requests")
-        .insert({
-          id: crypto.randomUUID(),
-          dance_id: dance.id,
-          request_type: "hide",
+      const response = await fetch("/api/dance-edit-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          danceId: dance.id,
+          requestType: "hide",
           title: dance.title,
           section: dance.section,
           organization: dance.organization ?? "Nollningen",
           year: dance.year,
-          song_title: dance.song_title,
-          dancer_names: dance.dancer_names ?? "",
+          songTitle: dance.song_title,
+          dancerNames: dance.dancer_names ?? "",
           artist: dance.artist,
-          spotify_url: dance.spotify_url,
-          video_url: dance.video_url,
-          thumbnail_url: dance.thumbnail_url,
-          requester_note: hideNote.trim(),
-          hide_until: hideIndefinitely ? null : hideUntil,
-          hide_indefinitely: hideIndefinitely,
-          status: "pending",
-        });
+          spotifyUrl: dance.spotify_url,
+          videoUrl: dance.video_url,
+          thumbnailUrl: dance.thumbnail_url,
+          requesterNote: hideNote.trim(),
+          hideUntil: hideIndefinitely ? null : hideUntil,
+          hideIndefinitely,
+          segments: [],
+        }),
+      });
 
-      if (requestError) {
-        throw new Error(requestError.message);
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Kunde inte skicka gömningsbegäran.");
       }
 
       setHideSuccess(true);
@@ -577,23 +520,7 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
       setOpen(false);
     } catch (hideRequestError) {
       const message = hideRequestError instanceof Error ? hideRequestError.message : "";
-      if (
-        message.toLowerCase().includes("schema cache") &&
-        (message.includes("request_type") ||
-          message.includes("hide_until") ||
-          message.includes("hide_indefinitely")) &&
-        message.includes("dance_edit_requests")
-      ) {
-        setHideError(
-          "Databasen saknar kolumner för gömningsbegäran. Kör senaste SQL-migrationen i Supabase och försök igen."
-        );
-      } else if (message.toLowerCase().includes("row-level security policy")) {
-        setHideError(
-          "Supabase blockerade gömningsbegäran via RLS. Kör senaste SQL-migration i Supabase och försök igen."
-        );
-      } else {
-        setHideError(message || "Kunde inte skicka gömningsbegäran.");
-      }
+      setHideError(message || "Kunde inte skicka gömningsbegäran.");
     } finally {
       setHideLoading(false);
     }
@@ -1083,4 +1010,3 @@ export default function EditDanceRequestForm({ dance, segments }: EditDanceReque
     </div>
   );
 }
-

@@ -1,5 +1,4 @@
-import { isAdmin } from "@/lib/supabase/auth-helpers";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdmin } from "@/lib/auth-helpers";
 import { Dance, DanceSegment } from "@/lib/types";
 import { sectionLabel, formatTime } from "@/lib/utils";
 import { notFound, redirect } from "next/navigation";
@@ -7,6 +6,7 @@ import { approveDance, rejectDance } from "../actions";
 import { Music, ExternalLink, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { getDanceById, getDanceSegments } from "@/lib/store";
 
 export const metadata: Metadata = { title: "Granska dans – NolleDansa" };
 export const dynamic = "force-dynamic";
@@ -20,21 +20,9 @@ export default async function AdminDancePage({ params }: PageProps) {
   if (!admin) redirect("/admin");
 
   const { id } = await params;
-  const supabase = createAdminClient();
+  const [dance, segments] = await Promise.all([getDanceById(id), getDanceSegments(id)]);
 
-  const [danceResult, segmentsResult] = await Promise.all([
-    supabase.from("dances").select("*").eq("id", id).single(),
-    supabase
-      .from("dance_segments")
-      .select("*")
-      .eq("dance_id", id)
-      .order("sort_order", { ascending: true }),
-  ]);
-
-  if (danceResult.error || !danceResult.data) notFound();
-
-  const dance = danceResult.data as Dance;
-  const segments = (segmentsResult.data ?? []) as DanceSegment[];
+  if (!dance) notFound();
 
   const statusLabel: Record<string, string> = {
     pending: "Väntar",
